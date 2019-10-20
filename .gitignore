@@ -43,5 +43,5 @@ site/
 site.zip
 
 # Jupyter chekpoints
+docs/data/.ipynb_checkpoints/
 docs/.ipynb_checkpoints/
-
