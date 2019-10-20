@@ -34,3 +34,14 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
+
+# vscode
+.vscode/
+
+# generated site
+site/
+site.zip
+
+# Jupyter chekpoints
+docs/.ipynb_checkpoints/
+
