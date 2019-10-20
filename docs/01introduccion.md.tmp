@@ -1,0 +1,338 @@
+# Introducción
+
+¿Para qué se necesitan los métodos multivariantes? ¿Cuáles son los inconvenientes de analizar una variable a la vez?
+
+## Objetivos de las técnicas multivariantes
+
+Como un ejemplo de un análisis multivariante vamos a crear un intervalo de confianza conjunto (simultáneo) de 95% de la mediana de los precios de los precios del alquiler de un apartamento y de la compra de vivienda en cada estado de los EEUU.
+
+
+```R
+housing <- read.table(file = "data//housing.txt")
+head(housing)
+```
+
+
+<table>
+<caption>A data.frame: 6 × 2</caption>
+<thead>
+	<tr><th></th><th scope=col>Apartment</th><th scope=col>House</th></tr>
+	<tr><th></th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;dbl&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><th scope=row>AK</th><td> 949</td><td>237.8</td></tr>
+	<tr><th scope=row>AL</th><td> 631</td><td>121.5</td></tr>
+	<tr><th scope=row>AR</th><td> 606</td><td>105.7</td></tr>
+	<tr><th scope=row>AZ</th><td> 866</td><td>229.2</td></tr>
+	<tr><th scope=row>CA</th><td>1135</td><td>467.0</td></tr>
+	<tr><th scope=row>CO</th><td> 848</td><td>242.2</td></tr>
+</tbody>
+</table>
+
+
+
+Los intervalos de confianza marginales de 95% para cada variable se muestran como un rectángulo, mientras que el intervalo bivariante se representa como un elipsoide. La siguiente función nos sirve para calcular el intervalo de confianza bivariante.
+
+`s` es la matriz de covarianzas, `xbar` es un vector de medias, `n` el número de observaciones, `alpha` la probabilidad, y `m` el número de puntos utilizado para representarlo.
+
+
+```R
+bivCI <- function(s, xbar, n, alpha, m){
+#  returns m (x,y) coordinates of 1-alpha 
+# joint confidence ellipse of mean
+
+    # m points on a unit circle  
+    x <- sin(2 * pi * (0 : (m - 1)) / (m - 1))  
+    y <- cos(2 * pi * (0 : (m - 1)) / (m - 1))
+    # chisquared critical value
+    cv <-  qchisq(1 - alpha, 2)
+    # value of quadratic form
+    cv <- cv / n                                 
+    for (i in 1 : m){
+         pair <- c(x[i], y[i])        # ith (x,y) pair
+         q <- pair %*% solve(s, pair) # quadratic form
+         x[i] <- x[i] * sqrt(cv / q) + xbar[1]
+         y[i] <- y[i] * sqrt(cv / q) + xbar[2]
+    }
+    cbind(x, y)
+}
+```
+
+Calculamos los intervalos de confianza individuales. 95% es la probabilidad por defecto.
+
+
+```R
+aptci <- t.test(housing$Apartment)$conf.int
+hoci <- t.test(housing$House)$conf.int
+```
+
+Y dibujamos el gráfico correspondiente.
+
+
+```R
+library(repr)
+
+options(repr.plot.width=4, repr.plot.height=4)
+
+plot(bivCI(var(housing), colMeans(housing), 
+     dim(housing)[1], .05, 2000), lwd = 3,
+     type = "l", xlab = colnames(housing)[1], 
+     ylab = colnames(housing)[2], col = 2,
+     xlim = aptci * c(.95, 1.05),
+     ylim = hoci * c(.95, 1.05))
+
+lines(colMeans(housing)[1], colMeans(housing)[2], pch = 3, 
+      cex = 2, type = "p", col = 4, lwd = 3)
+
+lines(aptci[c(1, 2, 2, 1, 1)], hoci[c(1, 1, 2, 2, 1)], 
+      type = "l", col = 3, lwd = 3)
+```
+
+
+![png](output_7_0.png)
+
+
+El área elíptica y el rectángulo se superponen. También hay áreas que están incluidas en una figura, pero no en la otra. Más importante aún, notemos que el área de la elipse es más pequeña que la del rectángulo. Esta diferencia en el área ilustra el beneficio de usar métodos multivariados sobre el enfoque marginal.
+
+Si utilizáramos métodos univariantes y obtuviéramos intervalos de confianza para cada variable individualmente, entonces la región de confianza resultante sería mayor que la región que tiene en cuenta la relación bivariante de alquileres de apartamentos y precios de vivienda. Esta figura proporciona una ilustración gráfica de los beneficios de usar métodos multivariados sobre el uso de una serie de análisis univariados.
+
+## Reducción de datos o simplificación estructural
+
+Aunque los expertos que realizan un estudio recogen los medidas que se consideran más útiles, la primera tarea del analista consiste en determinar cuáles variables son las que requieren nuestra atención. Muchos de los datos recabados pueden ser redundantes. Un objetivo del análisis de datos consiste en identificar los datos/variables que se deben mantener y los que pueden descartarse de forma segura.
+
+Consideremos los datos de los resultados de las pruebas estandarizadas PISA para distintos países o economías. La prueba PISA básicamente evalúa las capacidades académicas de estudiantes de 15 años de edad en 70 países diferentes.
+
+La puntuación total se divide en 5 subescalas diferentes que miden destrezas específicas. La puntuación de matemáticas y ciencia se indica aparte. ¿Qué beneficio ofrecen tener las distintas subescalas?, ¿Es posible eliminar o combinar subescalas sin que se pierda mucho detalles?
+
+A continuación gráficamos una matriz de diagramas de dispersión de las ocho puntuaciones para los países OECD del año 2019:
+
+
+```R
+options(repr.plot.width=6, repr.plot.height=6)
+
+PISA <- read.table(file = "data/OECD PISA.txt", 
+                   row.names= 1, header=TRUE)
+pairs(PISA, gap = 0, col="red", pch=16, xaxt="n", yaxt="n")
+```
+
+
+![png](output_9_0.png)
+
+
+La impresión inmediata que obtenemos de esta figura es que están altamente correlacionadas todas las mediciones entre sí.
+
+Hay algunos valores atípicos y algunos pares de mediciones están más estrechamente correlacionados, por supuesto, pero está claro que cualquier medida académica en los datos podría ser una buena representación para la mayoría de las demás. 
+
+Es evidente que se pueden simplificar estos datos en gran medida sin una pérdida significativa de información.
+
+## Agrupación y clasificación de observaciones
+
+En el 2006 Plutón dejó de ser considerado un planeta de nuestro sistema solar. La argumentación consistió en el hecho que hay una gran cantidad de objetos mayores y menores orbitando el sol a una distancia similar.
+
+Uno de estos grupos recibe el nombre de *Cinturón de Kuiper* que están a partir de la órbita de Netptuno de 30 a 55 unidades astronómicas (una unidad astronómica equivale a la distancia de la tierra al sol).
+
+El *Albedo* se refiere a la relación porcentual entre la luz reflejada y la absorbida. La *magnitud absoluta* es una medida del brillo aparente, corregida por la distancia del objeto, medido en una distancia algorítmica.
+Una magnitud absoluta mayor indica objetos más oscuros. El *eje semimayor* es la mayor distancia de la órbita al sol, medida en UA. 
+
+Muchos de los valores de esta tabla son, en el mejor de los casos, estimaciones aproximadas de estos objetos distantes y poco comprendidos.
+
+¿Es Plutón realmente algo diferente, o es similar al resto? ¿Merece volver obtener su estatus de planeta o solamente es miembro de un club más grande?
+
+¿Puede esta información resumirse de manera que retenga información útil? ¿Dónde cae Plutón desde este punto de vista más amplio?
+
+
+```R
+kuiper <- read.table(
+  "data//Kuiper.txt", 
+  header=TRUE)
+kuiper
+```
+
+
+<table>
+<caption>A data.frame: 13 × 6</caption>
+<thead>
+	<tr><th scope=col>designation</th><th scope=col>mag</th><th scope=col>albedo</th><th scope=col>diameter</th><th scope=col>axis</th><th scope=col>Year</th></tr>
+	<tr><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;int&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><td>Pluto   </td><td>-1.0</td><td>60.00</td><td>2320.0</td><td>39.4</td><td>1930</td></tr>
+	<tr><td>Makemake</td><td>-0.3</td><td>80.00</td><td>1500.0</td><td>45.7</td><td>2005</td></tr>
+	<tr><td>Haumea  </td><td> 0.1</td><td>84.00</td><td>1150.0</td><td>43.3</td><td>2005</td></tr>
+	<tr><td>Charon  </td><td> 1.0</td><td>40.00</td><td>1205.0</td><td>39.4</td><td>1978</td></tr>
+	<tr><td>Orcus   </td><td> 2.3</td><td>19.72</td><td> 946.3</td><td>39.4</td><td>2004</td></tr>
+	<tr><td>Quaoar  </td><td> 2.6</td><td>19.90</td><td> 844.0</td><td>43.5</td><td>2002</td></tr>
+	<tr><td>Ixion   </td><td> 3.2</td><td>12.00</td><td> 650.0</td><td>39.6</td><td>2001</td></tr>
+	<tr><td>55636   </td><td> 3.3</td><td>10.00</td><td> 800.0</td><td>43.1</td><td>2002</td></tr>
+	<tr><td>55565   </td><td> 3.3</td><td>11.77</td><td> 734.6</td><td>47.4</td><td>2002</td></tr>
+	<tr><td>55637   </td><td> 3.6</td><td>11.50</td><td> 681.2</td><td>42.5</td><td>2002</td></tr>
+	<tr><td>Varuna  </td><td> 3.7</td><td>16.00</td><td> 500.0</td><td>43.0</td><td>2000</td></tr>
+	<tr><td>2002MS4 </td><td> 3.8</td><td> 8.41</td><td> 726.2</td><td>41.8</td><td>2002</td></tr>
+	<tr><td>2003AZ84</td><td> 3.9</td><td>12.32</td><td> 685.8</td><td>39.6</td><td>2003</td></tr>
+</tbody>
+</table>
+
+
+
+Otro ejemplo de agrupación son las tasas de cáncer en los 50 estados de los EEUU. En la siguiente tabla se listan las tasas de cáncer de cada uno de los 50 estados de los EEUU y para algunos de los tipos de cáncer más comunes. Estas tasas se reportan como los casos por cada 100 mil personas. Cada estado tiene distintas distribuciones de edades en su población por lo que estas tasas están *ajustadas por la edad*.
+
+
+```R
+cancer_rates <- read.csv(
+  "data//US cancer rates.csv", 
+  header=TRUE)
+head(cancer_rates)
+```
+
+
+<table>
+<caption>A data.frame: 6 × 13</caption>
+<thead>
+	<tr><th scope=col>Region</th><th scope=col>State</th><th scope=col>All_cancers</th><th scope=col>Lung</th><th scope=col>Colon</th><th scope=col>Melanoma</th><th scope=col>F_breast</th><th scope=col>Pancreas</th><th scope=col>Leukemia</th><th scope=col>Ovarian</th><th scope=col>Cervix</th><th scope=col>Prostate</th><th scope=col>Liver</th></tr>
+	<tr><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><td>Connecticut  </td><td>CT</td><td>584.1</td><td>54.4</td><td>52.4</td><td>27.9</td><td>133.9</td><td>16.2</td><td>13.7</td><td>12.1</td><td>6.5</td><td>172.8</td><td> 9.8</td></tr>
+	<tr><td>Maine        </td><td>ME</td><td>598.9</td><td>70.4</td><td>53.6</td><td>24.6</td><td>128.9</td><td>13.1</td><td>20.7</td><td>11.8</td><td>7.5</td><td>165.7</td><td> 6.2</td></tr>
+	<tr><td>Massachusetts</td><td>MA</td><td>571.0</td><td>62.6</td><td>50.7</td><td>26.0</td><td>131.7</td><td>13.3</td><td>16.0</td><td>11.8</td><td>5.3</td><td>166.9</td><td>10.9</td></tr>
+	<tr><td>New Hampshire</td><td>NH</td><td>567.6</td><td>60.4</td><td>48.8</td><td>33.0</td><td>128.8</td><td>14.4</td><td>15.7</td><td>12.5</td><td>5.1</td><td>158.6</td><td> 6.5</td></tr>
+	<tr><td>Rhode Island </td><td>RI</td><td>603.3</td><td>71.6</td><td>54.5</td><td>24.7</td><td>139.2</td><td>11.8</td><td>16.4</td><td>11.8</td><td>7.0</td><td>170.1</td><td>10.8</td></tr>
+	<tr><td>Vermont      </td><td>VT</td><td>529.7</td><td>67.7</td><td>40.2</td><td>33.8</td><td>133.7</td><td>14.0</td><td>13.3</td><td>10.8</td><td>7.9</td><td>148.0</td><td> 9.5</td></tr>
+</tbody>
+</table>
+
+
+
+¿Cómo se relacionan los distintos tipos de cáncer entre ellos? ¿Cómo se podrían agrupar los distintos tipos de cáncer con patrones similares?
+
+También se podrían buscar agrupaciones entres estados, ¿Cuáles estados son similares entre ellos?, ¿Tienen tasas similares estados vecinos?, ¿Cómo se comparan los estados del sur con los del norte?
+
+¿Cómo se podrían agrupar todos los datos conjuntamente?, ¿Es la tasa de todos los cánceres un resumen razonable de las tasas para cada estado?,  ¿Los estados que se agrupan también tienen tasas comparables de sus "todos los cánceres"?. En lugar de una simple suma de todas las tasas individuales, ¿sería mejor construir un promedio ponderado, donde algunos cánceres reciben más énfasis que otros? ¿Deberían los cánceres más raros (hígado y cuello uterino, por ejemplo) tener más o menos peso que los cánceres más comunes?.
+
+## Examinar la dependencia entre variables
+
+La tabla a continuación es un resumen de los lugares recomendados de inversión para las principales empresas de gestión financiera a principios del 2011. Los valores representan las asignaciones porcentuales para sus *portafolios modelo*, pero también podrían haber recomendaciones específicas para circunstancias individuales.
+
+Las acciones y bonos se dividen en tres categorías: Estados Unidos, países industrializados no estadounidenses y países en desarrollo. 
+
+Las inversiones alternativas incluyen arrendamientos, sociedades de petróleo y gas, propiedades inmobiliarias, metales preciosos e inversiones similares. El efectivo incluye inversiones a corto plazo como el mercado monetario, depósitos bancarios y certificados de depósito.
+
+Es de esperar una pequeña correlación entre las recomendaciones. Se pueden encontrar relaciones entre los porcentajes asignados a las acciones y bonos tradicionales, y también en relación a las empresas especializadas en empresas nacionales y extranjeras.
+
+
+```R
+invest_alloc <- read.csv(
+  "data//investment allocations.csv", 
+  header=TRUE)
+
+head(invest_alloc)
+```
+
+
+<table>
+<caption>A data.frame: 6 × 9</caption>
+<thead>
+	<tr><th scope=col>Manager</th><th scope=col>US</th><th scope=col>Non.US</th><th scope=col>Developing</th><th scope=col>US.1</th><th scope=col>Non.US.1</th><th scope=col>Developing.1</th><th scope=col>Alternative</th><th scope=col>Cash</th></tr>
+	<tr><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><td>Alliance Bernstein</td><td>45</td><td> 3</td><td>17</td><td>35</td><td>0</td><td>0</td><td> 0</td><td>0</td></tr>
+	<tr><td>Atlantic Trust    </td><td>28</td><td> 6</td><td> 9</td><td>30</td><td>3</td><td>0</td><td>24</td><td>0</td></tr>
+	<tr><td>Bank of America   </td><td>53</td><td> 9</td><td> 3</td><td>28</td><td>1</td><td>1</td><td> 0</td><td>5</td></tr>
+	<tr><td>BNY Mellon        </td><td>26</td><td> 9</td><td>10</td><td>30</td><td>0</td><td>0</td><td>25</td><td>0</td></tr>
+	<tr><td>Bessemer          </td><td>19</td><td> 9</td><td> 3</td><td>20</td><td>4</td><td>5</td><td>34</td><td>6</td></tr>
+	<tr><td>Brown Advisory    </td><td>29</td><td>13</td><td>12</td><td>19</td><td>3</td><td>0</td><td>20</td><td>4</td></tr>
+</tbody>
+</table>
+
+
+
+Otro ejemplo son los datos nutricionales de la colección de algunas de las hamburguesas con más calorías servidas en cadenas de restaurantes que se encuentran en el sitio web fatsecret.com. La nutrición es un concepto intrínsecamente multivariado. No podemos hablar sólo de las calorías cuando hablamos de nutrición, sino que también necesitamos incluir datos sobre cuánto del valor calórico se deriva de las grasas. Las cantidades de sodio (sal) y proteína no forman parte del recuento de calorías y proporcionan diferentes calidades al contenido nutricional total.
+
+El contenido nutricional se obtuvo de las páginas web de cada restaurante. Cada hamburguesa tiene una lista de calorías y calorías de grasa, grasa, grasa saturada, sodio, carbohidratos y contenido de proteínas. El contenido nutricional de cada elemento del menú no es una medida única, sino que se expresa como estos siete componentes separados. Los siete valores están relacionados entre sí y deben ser tomados como un todo. Este es el concepto fundamental de los datos multivariados: cada elemento individual se caracteriza por un conjunto de varias mediciones relacionadas con cada uno de ellos.
+
+
+```R
+burguers <- read.csv(
+  "data//MY burger.csv", 
+  header=TRUE)
+
+head(burguers)
+```
+
+
+<table>
+<caption>A data.frame: 6 × 9</caption>
+<thead>
+	<tr><th scope=col>Restaurant</th><th scope=col>Burguer</th><th scope=col>CalFat</th><th scope=col>Cal</th><th scope=col>Fat</th><th scope=col>SatFat</th><th scope=col>Sodium</th><th scope=col>Carbs</th><th scope=col>Protein</th></tr>
+	<tr><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;fct&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><td>Chilis</td><td>Bacon Burger    </td><td> 612</td><td>1050</td><td> 68</td><td>21</td><td>1750</td><td> 53</td><td>55</td></tr>
+	<tr><td>Chilis</td><td>Big Mouth Bites </td><td>1197</td><td>2120</td><td>133</td><td>38</td><td>4200</td><td>139</td><td>65</td></tr>
+	<tr><td>Chilis</td><td>Southern Bacon… </td><td> 963</td><td>1610</td><td>107</td><td>36</td><td>4150</td><td> 81</td><td>53</td></tr>
+	<tr><td>Chilis</td><td>Mushroom-Swiss… </td><td> 729</td><td>1470</td><td> 81</td><td>24</td><td>3450</td><td>120</td><td>53</td></tr>
+	<tr><td>Chilis</td><td>Avocado Burger  </td><td> 639</td><td>1570</td><td> 90</td><td>29</td><td>3170</td><td>138</td><td>54</td></tr>
+	<tr><td>Chilis</td><td>Smokehouse Bacon</td><td>1098</td><td>1720</td><td>122</td><td>44</td><td>3819</td><td> 62</td><td>93</td></tr>
+</tbody>
+</table>
+
+
+
+## Describiendo relaciones entre grupos de variables
+
+Volviendo a la tabla de precios de alquiler de apartamentos y compra de viviendas, ¿Cómo se pueden describir las diferencias de los costos asociados con vivir en cada uno de los estados?. Si añadimos el índice del costo de la vida, aunque las tres variables estén correlacionadas, el uso de regresiones separadas haría que se perdieran las interacciones entre las variables. ¿Qué parte del costo puede explicarse por la población y el ingreso?, y una vez corregido por esta relación, ¿Cuánta diferencia entre los estados puede atribuirse al costo de la vivienda?
+
+## Formulación de hipótesis y pruebas
+
+En disciplinas como la astronomía en el que se adquieren grandes cantidades de datos, se generan hipótesis que buscan confirmación estadística. En el siguiente gráfico se muestra la magnitud visual de 3858 galaxias en una parte del cielo. Las posiciones en el cielo se establecen en coordenadas polares del mismo modo en que se indican los lugares en la tierra: la ascención recta es similar a la latitud, y la declinación similar a la latitud.
+
+
+```R
+# Shapley galaxy data
+
+galaxy <- read.table(
+  "data//Shapley_galaxy.dat", 
+  header=TRUE)
+
+galaxy <- galaxy[galaxy$Mag > 0, ] # Omit missing values?
+
+head(galaxy)
+```
+
+
+<table>
+<caption>A data.frame: 6 × 5</caption>
+<thead>
+	<tr><th scope=col>R.A.</th><th scope=col>Dec.</th><th scope=col>Mag</th><th scope=col>V</th><th scope=col>SigV</th></tr>
+	<tr><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;dbl&gt;</th><th scope=col>&lt;int&gt;</th><th scope=col>&lt;int&gt;</th></tr>
+</thead>
+<tbody>
+	<tr><td>193.0296</td><td>-32.84556</td><td>15.23</td><td>15056</td><td> 81</td></tr>
+	<tr><td>193.0404</td><td>-28.54083</td><td>17.22</td><td>16995</td><td> 32</td></tr>
+	<tr><td>193.0404</td><td>-28.22556</td><td>17.29</td><td>21211</td><td> 81</td></tr>
+	<tr><td>193.0542</td><td>-28.33889</td><td>18.20</td><td>29812</td><td> 37</td></tr>
+	<tr><td>193.0554</td><td>-29.84056</td><td>12.55</td><td> 2930</td><td> 38</td></tr>
+	<tr><td>193.0563</td><td>-30.33056</td><td>17.62</td><td>16042</td><td>104</td></tr>
+</tbody>
+</table>
+
+
+
+
+```R
+plot(galaxy$R.A., galaxy$Dec., pch = 16, cex = .5,
+   xlab = "Right ascension",
+   ylab = "Declination",
+   col=c("blue", "red")[1 + (galaxy$Mag < 16)])
+```
+
+
+![png](output_22_0.png)
+
+
+La magnitud es el brillo visual medido en una escala de registro invertida: los números más grandes son más oscuros. Cada incremento en una unidad es aproximadamente 2.5 veces más débil. Una magnitud de 6 es aproximadamente el límite del ojo humano; esto se extiende a unos 10 con binoculares. La magnitud 27 es el límite aproximado de los telescopios terrestres más grandes, y el Telescopio Espacial Hubble puede detectar la magnitud 32. En el gráfico, las galaxias más brillantes (y generalmente más cercanas) están en rojo y las más tenues en azul.
+
+Las galaxias más brillantes en rojo parecen estar distribuidas uniformemente a través de este campo, pero las más tenues en azul parecen agruparse en la parte superior izquierda de esta figura. Se sabe que las galaxias no están distribuidas uniformemente, sino más bien, agrupadas como la superficie de las burbujas, en paredes curvas, centradas alrededor de vastos espacios aparentemente vacíos.
+
+Por supuesto, esta figura sólo muestra los objetos registrados en el momento en que se recopilaron los datos. Las galaxias más oscuras, que aún no han sido detectadas, no están. En la medida que mejore la tecnología, habría muchos más objetos que se dibujarían en azul.
